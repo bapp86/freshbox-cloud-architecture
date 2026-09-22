@@ -3,113 +3,348 @@
 [![AWS](https://img.shields.io/badge/AWS-Cloud%20Infrastructure-orange?logo=amazon-aws)](https://aws.amazon.com/)
 [![Terraform](https://img.shields.io/badge/Terraform-Infrastructure%20as%20Code-7B42BC?logo=terraform)](https://www.terraform.io/)
 [![Docker](https://img.shields.io/badge/Docker-Containers-2496ED?logo=docker)](https://www.docker.com/)
-[![MySQL](https://img.shields.io/badge/MySQL-Database-4479A1?logo=mysql)](https://www.mysql.com/)
+[![Node.js](https://img.shields.io/badge/Node.js-Backend-339933?logo=node.js)](https://nodejs.org/)
+[![MariaDB](https://img.shields.io/badge/MariaDB-Database-003545?logo=mariadb)](https://mariadb.org/)
 
 Repositorio oficial correspondiente a la **Evaluación Parcial N.º 1 (EP1)** de la asignatura **Arquitectura Cloud (ARY1102)**.
 
-El proyecto implementa una infraestructura en **Amazon Web Services (AWS)** para el e-commerce de **FreshBox SpA**, siguiendo un modelo de arquitectura de **tres capas (Three-Tier Architecture)**, orientado a seguridad, escalabilidad y alta disponibilidad.
+El proyecto implementa una arquitectura cloud para el e-commerce de **FreshBox SpA**, utilizando servicios de **Amazon Web Services (AWS)** bajo un modelo de **tres capas (Three-Tier Architecture)**.
+
+La solución está orientada a entregar **seguridad, escalabilidad automática, tolerancia a fallos y una adecuada segmentación de red**, permitiendo soportar el crecimiento proyectado de la plataforma.
 
 ---
 
-## 📌 Descripción del Proyecto
+## 📋 Descripción del Proyecto
 
-La solución contempla la implementación de una arquitectura cloud distribuida en **dos Zonas de Disponibilidad de AWS**, separando las responsabilidades de presentación, aplicación y datos.
+FreshBox SpA corresponde a una empresa dedicada a la venta online de productos orgánicos, que presenta un crecimiento sostenido del **40% trimestral** y requiere una plataforma capaz de soportar un catálogo online administrable.
 
-La infraestructura es aprovisionada mediante **Terraform** y utiliza servicios y tecnologías como:
+La solución implementada considera:
 
-* **Amazon VPC** para la segmentación de red.
-* **Application Load Balancer (ALB)** para distribuir el tráfico.
-* **Amazon EC2** dentro de un **Auto Scaling Group (ASG)**.
-* **Amazon ECR** para almacenar las imágenes Docker.
-* **Docker** para la ejecución de microservicios.
-* **MySQL** como sistema de gestión de base de datos.
-* **AWS Systems Manager Session Manager** para la administración de las instancias sin necesidad de acceso SSH directo.
+* Infraestructura como Código mediante **Terraform**.
+* Una **VPC** dedicada para la aplicación.
+* Subredes públicas y privadas.
+* Distribución de recursos en las Availability Zones:
+
+  * `us-east-1a`
+  * `us-east-1b`
+* **Application Load Balancer (ALB)** como punto de entrada público.
+* **Auto Scaling Group (ASG)** para la capa de aplicación.
+* Instancias **EC2 `t4g.small` ARM64 / Graviton2**.
+* Contenedores **Docker**.
+* Repositorios privados en **Amazon ECR**.
+* Base de datos **MariaDB** en una instancia EC2 privada.
+* **AWS Systems Manager Session Manager** para administración de las instancias.
+* **NAT Gateway** para permitir salida controlada desde las subredes privadas.
 
 ---
 
-## 🏗️ Arquitectura de la Solución
+# 🏗️ Arquitectura de la Solución
 
-La infraestructura se distribuye en las siguientes capas:
+La solución sigue una arquitectura clásica de **tres capas**, separando presentación, aplicación y datos.
 
-### Capa 1 — Presentación / Pública
+```text
+                                 INTERNET
+                                     │
+                                     ▼
+                           ┌─────────────────────┐
+                           │ Internet Gateway    │
+                           └──────────┬──────────┘
+                                      │
+                                      ▼
+                           ┌─────────────────────┐
+                           │ Application Load    │
+                           │ Balancer (ALB)      │
+                           └──────────┬──────────┘
+                                      │
+                    ┌─────────────────┴─────────────────┐
+                    │                                   │
+                    ▼                                   ▼
+          ┌───────────────────┐               ┌───────────────────┐
+          │   us-east-1a      │               │   us-east-1b      │
+          │   EC2 App         │               │   EC2 App         │
+          │                   │               │                   │
+          │ Nginx / Frontend  │               │ Nginx / Frontend  │
+          │ Node.js APIs      │               │ Node.js APIs      │
+          │ Docker            │               │ Docker            │
+          └─────────┬─────────┘               └─────────┬─────────┘
+                    │                                   │
+                    └─────────────────┬─────────────────┘
+                                      │
+                                      ▼
+                           ┌─────────────────────┐
+                           │  MariaDB / MySQL    │
+                           │  EC2 Privada        │
+                           │  10.0.2.6            │
+                           └─────────────────────┘
 
-Responsable de recibir las solicitudes provenientes de Internet.
 
-* Internet Gateway
-* Application Load Balancer (ALB)
-* Acceso mediante DNS público
+        EC2 privadas
+             │
+             ▼
+      ┌──────────────┐
+      │ NAT Gateway  │
+      └──────┬───────┘
+             │
+             ▼
+          Internet
+        / Amazon ECR
+```
 
-### Capa 2 — Aplicación / Privada
+> La alta disponibilidad se implementa principalmente en la **capa de aplicación**, mediante un Auto Scaling Group con instancias distribuidas en distintas Availability Zones. La capa de datos corresponde a una instancia dedicada de MariaDB.
 
-Responsable de ejecutar la aplicación y sus microservicios.
+---
 
-* Auto Scaling Group
-* Instancias EC2
-* Arquitectura ARM64
-* Nginx
-* Microservicios desarrollados con Node.js
-* Contenedores Docker
-* Red interna de Docker: `freshbox-net`
+# 🌐 Diseño de Red
 
-### Capa 3 — Datos / Privada
+La infraestructura utiliza una **VPC con CIDR `10.0.0.0/22`**, distribuida en dos Availability Zones.
 
-Responsable del almacenamiento persistente de la aplicación.
+```text
+VPC-FreshBox
+CIDR: 10.0.0.0/22
 
-* Instancia dedicada para MySQL
-* Subred privada
-* Sin exposición directa a Internet
-* Acceso controlado desde la capa de aplicación
+├── us-east-1a
+│   ├── Subred Pública
+│   │   └── Application Load Balancer
+│   │
+│   └── Subred Privada
+│       └── EC2 APP
+│
+└── us-east-1b
+    ├── Subred Pública
+    │   └── Application Load Balancer
+    │
+    └── Subred Privada
+        └── EC2 APP
 
-### Diagrama de arquitectura
+Subred Privada de Datos
+└── EC2 MariaDB
+    └── IP privada: 10.0.2.6
+```
 
-```mermaid
-flowchart TB
-    USER[Usuario / Internet]
+La separación de subredes permite restringir el acceso directo a los componentes internos y mantener la base de datos aislada de Internet.
 
-    IGW[Internet Gateway]
-    ALB[Application Load Balancer]
+---
 
-    subgraph AWS[AWS — us-east-1]
-        subgraph APP1[Availability Zone — us-east-1a]
-            EC2A[EC2 App]
-        end
+# 🔐 Seguridad
 
-        subgraph APP2[Availability Zone — us-east-1b]
-            EC2B[EC2 App]
-        end
+La arquitectura aplica una segmentación de red basada en **Security Groups** y principio de menor privilegio.
 
-        subgraph DATA[Capa de Datos — Subred Privada]
-            MYSQL[(MySQL Database)]
-        end
-    end
+### Security Group del ALB
 
-    USER --> IGW
-    IGW --> ALB
+Permite recibir tráfico HTTP desde Internet:
 
-    ALB --> EC2A
-    ALB --> EC2B
+```text
+Internet
+   ↓
+ALB
+   ↓
+HTTP :80
+```
 
-    EC2A --> MYSQL
-    EC2B --> MYSQL
+### Security Group de las aplicaciones
+
+El acceso entrante está restringido para aceptar tráfico únicamente desde el Security Group del ALB.
+
+```text
+SG-ALB
+   ↓
+SG-APP
+```
+
+### Security Group de la base de datos
+
+El acceso al puerto de base de datos está restringido exclusivamente a la capa de aplicación.
+
+```text
+SG-APP
+   ↓
+SG-DATA
+   ↓
+MariaDB :3306
+```
+
+De esta forma:
+
+```text
+Internet
+   │
+   ▼
+ALB
+   │
+   ▼
+Aplicación
+   │
+   ▼
+MariaDB
+```
+
+No existe acceso directo desde Internet hacia la base de datos.
+
+---
+
+# ⚙️ Tecnologías Utilizadas
+
+| Tecnología                    | Función                                   |
+| ----------------------------- | ----------------------------------------- |
+| **Amazon Web Services**       | Plataforma Cloud                          |
+| **Amazon VPC**                | Segmentación de red                       |
+| **Internet Gateway**          | Acceso de la capa pública a Internet      |
+| **NAT Gateway**               | Salida controlada desde subredes privadas |
+| **Application Load Balancer** | Balanceo del tráfico HTTP                 |
+| **Amazon EC2**                | Cómputo de la aplicación y base de datos  |
+| **Auto Scaling Group**        | Escalabilidad y tolerancia a fallos       |
+| **Amazon ECR**                | Almacenamiento privado de imágenes Docker |
+| **AWS Systems Manager**       | Administración mediante Session Manager   |
+| **Terraform**                 | Infraestructura como Código               |
+| **Docker**                    | Contenerización                           |
+| **Nginx**                     | Frontend y proxy inverso                  |
+| **Node.js**                   | Microservicios backend                    |
+| **MariaDB**                   | Base de datos relacional                  |
+
+---
+
+# 🖥️ Capa de Aplicación
+
+La capa de aplicación está ubicada en **subredes privadas** y es administrada mediante un **Auto Scaling Group**.
+
+Las instancias utilizadas corresponden a:
+
+```text
+Tipo: t4g.small
+Arquitectura: ARM64
+Familia: Graviton2
+Sistema operativo: Amazon Linux 2023
+```
+
+El Auto Scaling Group se configuró con:
+
+```text
+Capacidad mínima:     2 instancias
+Capacidad deseada:    2 instancias
+Capacidad máxima:     4 instancias
+```
+
+Las instancias se encuentran distribuidas entre:
+
+```text
+us-east-1a
+us-east-1b
+```
+
+Esto permite mantener capacidad disponible ante la falla de una instancia o de una Availability Zone.
+
+---
+
+# 🐳 Contenedores Docker
+
+Cada instancia de aplicación ejecuta cinco contenedores conectados mediante la red interna:
+
+```text
+freshbox-net
+```
+
+Los contenedores corresponden a:
+
+1. `frontend`
+2. `get-products`
+3. `create-product`
+4. `update-product`
+5. `delete-product`
+
+La arquitectura de contenedores puede representarse como:
+
+```text
+                 ┌──────────────────┐
+                 │      Nginx       │
+                 │    frontend      │
+                 │      :80         │
+                 └────────┬─────────┘
+                          │
+                ┌─────────┴─────────┐
+                │                   │
+                ▼                   ▼
+       ┌────────────────┐   ┌──────────────────┐
+       │ Microservicios │   │   Base de Datos  │
+       │    Node.js     │──►│     MariaDB      │
+       └────────────────┘   └──────────────────┘
 ```
 
 ---
 
-# ⚙️ Requisitos Previos
+# 📦 Microservicios
 
-Para desplegar el proyecto desde una máquina con **Ubuntu**, es necesario contar con las siguientes herramientas.
+| Contenedor       | Descripción                               | Puerto | Endpoint            | Método HTTP |
+| ---------------- | ----------------------------------------- | -----: | ------------------- | ----------- |
+| `frontend`       | Interfaz web con Nginx, HTML y JavaScript |   `80` | `/`                 | `GET`       |
+| `get-products`   | Consulta el catálogo                      | `3001` | `/api/products`     | `GET`       |
+| `create-product` | Registra productos                        | `3002` | `/api/products`     | `POST`      |
+| `update-product` | Actualiza productos                       | `3003` | `/api/products/:id` | `PUT`       |
+| `delete-product` | Elimina productos                         | `3004` | `/api/products/:id` | `DELETE`    |
 
-## 1. Actualizar el sistema
+---
+
+# 🗄️ Capa de Datos
+
+La capa de datos corresponde a una instancia dedicada ubicada en una **subred privada aislada**.
+
+```text
+Servidor:
+EC2-MySQL
+
+Motor:
+MariaDB
+
+IP privada:
+10.0.2.6
+
+Puerto:
+3306
+```
+
+La base de datos utilizada por la aplicación corresponde a:
+
+```text
+freshbox
+```
+
+El script `init.sql` se utiliza para:
+
+* Crear la base de datos.
+* Crear el usuario de aplicación.
+* Crear las estructuras requeridas.
+* Insertar los cinco productos iniciales del catálogo.
+
+---
+
+# 📋 Requisitos Previos
+
+Para realizar el despliegue desde Ubuntu se requiere contar con:
+
+* Git
+* Curl
+* Unzip
+* Wget
+* Terraform
+* AWS CLI
+* Docker
+
+---
+
+## 1. Actualizar Ubuntu
 
 ```bash
 sudo apt update && sudo apt upgrade -y
 ```
 
-## 2. Instalar Git y utilidades básicas
+---
+
+## 2. Instalar herramientas básicas
 
 ```bash
 sudo apt install git curl unzip wget gnupg software-properties-common -y
 ```
+
+---
 
 ## 3. Instalar Terraform
 
@@ -129,10 +364,13 @@ sudo apt install terraform -y
 terraform --version
 ```
 
+---
+
 ## 4. Instalar AWS CLI
 
 ```bash
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" \
+  -o "awscliv2.zip"
 
 unzip awscliv2.zip
 
@@ -140,6 +378,8 @@ sudo ./aws/install
 
 aws --version
 ```
+
+---
 
 ## 5. Instalar Docker
 
@@ -157,11 +397,9 @@ docker --version
 
 ---
 
-# 🚀 Guía de Despliegue
+# 🚀 Despliegue
 
 ## Paso 1 — Clonar el repositorio
-
-Clona el proyecto y accede al directorio principal:
 
 ```bash
 git clone https://github.com/bapp86/freshbox-cloud-architecture.git
@@ -171,78 +409,78 @@ cd freshbox-cloud-architecture
 
 ---
 
-## Paso 2 — Aprovisionar la infraestructura con Terraform
+# Paso 2 — Aprovisionar infraestructura con Terraform
 
-Inicializa Terraform:
+Inicializar Terraform:
 
 ```bash
 terraform init
 ```
 
-Revisa previamente los cambios que serán realizados:
+Revisar la infraestructura propuesta:
 
 ```bash
 terraform plan
 ```
 
-Luego aplica la configuración:
+Aplicar la configuración:
 
 ```bash
 terraform apply
 ```
 
-Cuando Terraform solicite confirmación, escribe:
+Confirmar la operación cuando Terraform lo solicite:
 
 ```text
 yes
 ```
 
-### Outputs principales
+La implementación provisiona los principales componentes de la arquitectura:
 
-Al finalizar el despliegue, Terraform entregará información relevante de la infraestructura, incluyendo:
-
-```text
-alb_dns_name
-mysql_private_ip
-```
-
-Estos valores serán utilizados posteriormente para acceder a la aplicación y configurar la conexión con la base de datos.
+* VPC
+* Subredes públicas y privadas
+* Security Groups
+* Internet Gateway
+* NAT Gateway
+* Application Load Balancer
+* Auto Scaling Group
+* Instancias EC2
 
 ---
 
-# 🗄️ Paso 3 — Configuración de MySQL
+# Paso 3 — Configurar la Base de Datos
 
-Una vez desplegada la infraestructura, conéctate a la instancia de base de datos ubicada en la **subred privada**.
+Conectarse mediante **AWS Systems Manager Session Manager** a la instancia privada de base de datos.
 
-Posteriormente, ejecuta el script de inicialización:
+La instancia utilizada en la implementación corresponde a:
+
+```text
+EC2-MySQL
+IP privada: 10.0.2.6
+```
+
+Una vez establecida la conexión, ejecutar el script de inicialización:
 
 ```bash
 mysql -h <MYSQL_PRIVATE_IP> -u alumno -p < init.sql
 ```
 
-La contraseña configurada en el entorno de evaluación es:
+La credencial utilizada durante la implementación académica corresponde a:
 
 ```text
-alumno123
+Usuario: alumno
+Contraseña: alumno123
 ```
 
-> **Nota:** Para ambientes productivos, se recomienda utilizar AWS Secrets Manager, variables de entorno seguras o mecanismos equivalentes en lugar de credenciales almacenadas directamente en archivos o comandos.
-
-El script `init.sql` se encarga de:
-
-* Crear la base de datos `freshbox`.
-* Crear las tablas necesarias.
-* Insertar los **5 productos orgánicos iniciales**.
+> **Importante:** Estas credenciales forman parte del entorno académico descrito en el proyecto. No deben utilizarse como credenciales de producción.
 
 ---
 
-# 📦 Paso 4 — Amazon ECR y Docker
+# Paso 4 — Amazon ECR
 
-Amazon ECR se utiliza como registro privado para almacenar las imágenes de los microservicios.
+Las imágenes de los microservicios son almacenadas en repositorios privados de **Amazon Elastic Container Registry (ECR)**.
 
-## Autenticarse en Amazon ECR
-
-Configura la autenticación utilizando la región correspondiente:
+Autenticación:
 
 ```bash
 aws ecr get-login-password --region us-east-1 \
@@ -251,71 +489,49 @@ aws ecr get-login-password --region us-east-1 \
 --password-stdin <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
 ```
 
-Reemplaza:
+Reemplazar:
 
 ```text
 <AWS_ACCOUNT_ID>
 ```
 
-por el ID de la cuenta AWS correspondiente.
+por el ID correspondiente de la cuenta AWS.
 
-## Publicar las imágenes
+Las imágenes utilizadas corresponden a cinco componentes:
 
-Una vez construidas las imágenes Docker, deben ser etiquetadas y enviadas a los repositorios correspondientes de Amazon ECR.
-
-Ejemplo:
-
-```bash
-docker tag <imagen-local>:latest \
-<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/<repositorio>:latest
+```text
+frontend
+get-products
+create-product
+update-product
+delete-product
 ```
 
-```bash
-docker push \
-<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/<repositorio>:latest
-```
+Todas las imágenes fueron construidas para la arquitectura:
 
-Repite este procedimiento para cada microservicio.
+```text
+ARM64
+```
 
 ---
 
-# 🖥️ Paso 5 — Despliegue en EC2
+# Paso 5 — Despliegue de los contenedores
 
-Las instancias de aplicación son administradas mediante **AWS Systems Manager — Session Manager**.
-
-Conéctate a una de las instancias pertenecientes al:
+El acceso a las instancias de aplicación se realiza mediante:
 
 ```text
-EC2-APP-ASG
+AWS Systems Manager — Session Manager
 ```
 
-Una vez dentro de la instancia, crea la red interna de Docker:
+En cada instancia de aplicación se utiliza la red interna:
 
 ```bash
 docker network create freshbox-net
 ```
 
-Esta red permite la comunicación entre los contenedores que ejecutan los diferentes microservicios.
+Los contenedores deben conectarse a esta red para permitir la comunicación entre ellos.
 
----
-
-## Variables de entorno
-
-Los contenedores deben configurarse utilizando las variables necesarias para conectarse a MySQL.
-
-Ejemplo:
-
-```bash
--e DB_HOST=<MYSQL_PRIVATE_IP>
--e DB_USER=alumno
--e DB_PASS=<DB_PASSWORD>
--e DB_NAME=freshbox
--e PORT=3001
-```
-
----
-
-## Ejemplo de ejecución del microservicio `get-products`
+Ejemplo del microservicio `get-products`:
 
 ```bash
 docker run -d \
@@ -330,172 +546,297 @@ docker run -d \
   <AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/freshbox-get-products:latest
 ```
 
-El mismo procedimiento debe aplicarse a los demás microservicios de la solución.
+El mismo procedimiento se aplica a los demás microservicios.
 
 ---
 
-# 🔌 Microservicios
+# 🔄 Flujo de Comunicación
 
-La aplicación está compuesta por cinco contenedores principales:
-
-| Contenedor       | Descripción                                     | Puerto | Endpoint            | Método   |
-| ---------------- | ----------------------------------------------- | -----: | ------------------- | -------- |
-| `frontend`       | Interfaz web basada en Nginx, HTML y JavaScript |   `80` | `/`                 | `GET`    |
-| `get-products`   | Consulta el catálogo de productos               | `3001` | `/api/products`     | `GET`    |
-| `create-product` | Registra nuevos productos                       | `3002` | `/api/products`     | `POST`   |
-| `update-product` | Actualiza productos existentes                  | `3003` | `/api/products/:id` | `PUT`    |
-| `delete-product` | Elimina productos del sistema                   | `3004` | `/api/products/:id` | `DELETE` |
-
----
-
-# 🌐 Flujo de Solicitudes
-
-El flujo principal de una solicitud es el siguiente:
+El flujo esperado de una solicitud es:
 
 ```text
-Internet
-   │
-   ▼
-Internet Gateway
-   │
-   ▼
-Application Load Balancer
-   │
-   ▼
-EC2 — Auto Scaling Group
-   │
-   ├──► Nginx / Frontend
-   │
-   └──► Microservicios Node.js
-             │
-             ▼
-        MySQL — Subred Privada
+                  INTERNET
+                     │
+                     ▼
+             Internet Gateway
+                     │
+                     ▼
+            Application Load
+               Balancer
+                     │
+                     ▼
+             Nginx / Frontend
+                     │
+            ┌────────┴────────┐
+            │                 │
+            ▼                 ▼
+      Node.js APIs       Archivos Web
+            │
+            ▼
+        MariaDB
+       10.0.2.6
 ```
 
-La separación por capas permite aislar los componentes de la infraestructura y controlar el flujo de comunicación entre ellos.
+Para el acceso de las instancias privadas a servicios externos:
+
+```text
+EC2 Privada
+     │
+     ▼
+NAT Gateway
+     │
+     ▼
+Internet / Amazon ECR
+```
 
 ---
 
 # 🔍 Validación End-to-End
 
-Una vez finalizado el despliegue, puedes comprobar el funcionamiento de la aplicación utilizando el DNS público entregado por Terraform.
+Una vez implementada la infraestructura, se realizaron pruebas para comprobar el flujo completo de comunicación.
 
-## Consultar los productos
+## 1. Acceso público
 
-```bash
-curl http://<ALB_DNS_NAME>/api/products
-```
+Se accedió al DNS proporcionado por el **Application Load Balancer**.
 
-También puedes acceder directamente desde un navegador:
+El frontend fue cargado correctamente, confirmando que:
 
 ```text
-http://<ALB_DNS_NAME>/api/products
+Internet
+   ↓
+ALB
+   ↓
+Instancia EC2 privada
+   ↓
+Nginx
 ```
 
-Una respuesta correcta debería devolver la información de los productos almacenados en la base de datos.
+funciona correctamente.
 
 ---
 
-# ✅ Checklist de Despliegue
+## 2. Validación de la API
 
-Antes de considerar finalizada la implementación, verifica:
+La ruta:
 
-* [ ] Terraform fue inicializado correctamente.
-* [ ] La infraestructura fue creada sin errores.
-* [ ] El Application Load Balancer está disponible.
-* [ ] Las instancias EC2 pertenecen al Auto Scaling Group.
-* [ ] La instancia MySQL se encuentra en una subred privada.
-* [ ] Las imágenes fueron publicadas en Amazon ECR.
-* [ ] Los contenedores Docker están ejecutándose correctamente.
-* [ ] Todos los contenedores utilizan la red `freshbox-net`.
-* [ ] La aplicación puede comunicarse con MySQL.
-* [ ] El endpoint `/api/products` responde correctamente.
-* [ ] El frontend es accesible mediante el DNS del ALB.
+```text
+/api/products
+```
+
+fue consultada directamente a través del Load Balancer.
+
+Resultado:
+
+```text
+HTTP 200 OK
+```
+
+La respuesta devolvió los **5 productos iniciales** almacenados en la base de datos.
+
+Flujo validado:
+
+```text
+Cliente
+   ↓
+ALB
+   ↓
+Nginx
+   ↓
+Microservicio Node.js
+   ↓
+MariaDB
+```
 
 ---
 
-# 🛡️ Consideraciones de Seguridad
+# ⚠️ Hallazgo Durante las Pruebas
 
-La arquitectura busca mantener los componentes sensibles aislados de Internet.
-
-### Red
-
-* El **Application Load Balancer** funciona como punto de entrada público.
-* Las instancias de aplicación se encuentran en **subredes privadas**.
-* La base de datos MySQL permanece en una **subred privada**.
-* El acceso entre capas está controlado mediante **Security Groups**.
-
-### Administración
-
-La administración de las instancias EC2 se realiza mediante:
+Durante las pruebas funcionales se detectó un problema en el botón:
 
 ```text
-AWS Systems Manager — Session Manager
+"Cargar productos"
 ```
 
-evitando la necesidad de exponer directamente un puerto SSH a Internet.
-
-### Credenciales
-
-Para fines académicos se utiliza la credencial definida por el entorno:
+La interfaz devolvía:
 
 ```text
-alumno / alumno123
+Connection Timed Out
 ```
 
-En un entorno productivo, estas credenciales deberían ser reemplazadas por un mecanismo seguro de gestión de secretos.
+El análisis permitió determinar que el archivo `app.js` intentaba conectarse directamente al puerto:
+
+```text
+3001
+```
+
+Esta conexión fue bloqueada correctamente por las reglas del **Security Group**, debido a que el microservicio backend no está expuesto directamente a Internet.
+
+Sin embargo, la API respondió correctamente cuando fue consultada a través de la ruta:
+
+```text
+/api/products
+```
+
+obteniendo:
+
+```text
+HTTP 200
+```
+
+y los cinco productos de la base de datos.
+
+Este comportamiento permitió comprobar que la infraestructura de red y el backend se encuentran operativos, mientras que la integración del frontend requiere ajustar la ruta de consumo de la API para utilizar el flujo definido por Nginx.
 
 ---
 
-# 📁 Estructura General del Proyecto
+# ✅ Checklist de Validación
+
+Antes de considerar finalizado el despliegue:
+
+* [ ] Terraform inicializado correctamente.
+* [ ] VPC creada.
+* [ ] Subredes públicas y privadas disponibles.
+* [ ] Recursos distribuidos en `us-east-1a` y `us-east-1b`.
+* [ ] Internet Gateway configurado.
+* [ ] NAT Gateway operativo.
+* [ ] Security Groups configurados correctamente.
+* [ ] Application Load Balancer disponible.
+* [ ] Auto Scaling Group configurado con 2–4 instancias.
+* [ ] Instancias `t4g.small` ARM64 operativas.
+* [ ] Imágenes disponibles en Amazon ECR.
+* [ ] Cinco contenedores Docker ejecutándose.
+* [ ] Red `freshbox-net` creada.
+* [ ] MariaDB disponible en la instancia privada.
+* [ ] Base de datos `freshbox` inicializada.
+* [ ] Cinco productos cargados.
+* [ ] Endpoint `/api/products` responde `HTTP 200`.
+* [ ] Acceso mediante DNS del ALB validado.
+
+---
+
+# 📈 Escalabilidad y Disponibilidad
+
+La arquitectura implementa escalabilidad mediante **Auto Scaling Group**, configurado con:
+
+```text
+Mínimo:    2
+Deseado:   2
+Máximo:    4
+```
+
+Las instancias se distribuyen entre dos Availability Zones:
+
+```text
+us-east-1a
+us-east-1b
+```
+
+El **Application Load Balancer** distribuye las solicitudes entre las instancias disponibles.
+
+Esto permite mantener capacidad en la capa de aplicación ante fallos de instancias y absorber incrementos de demanda mediante el mecanismo de Auto Scaling.
+
+> La capa de datos actual utiliza una única instancia MariaDB. Una evolución futura de la arquitectura contempla migrar esta capa a **Amazon RDS con Multi-AZ** para mejorar la disponibilidad de la base de datos.
+
+---
+
+# 💰 Optimización de Costos
+
+La solución considera el uso de instancias:
+
+```text
+t4g.small
+```
+
+basadas en arquitectura **ARM64 / Graviton2**, buscando una adecuada relación entre costo y rendimiento.
+
+El uso de **Auto Scaling** permite adaptar la capacidad de cómputo de la capa de aplicación según las necesidades del sistema.
+
+---
+
+# 🔮 Mejoras Futuras
+
+Como parte de la evolución de la arquitectura, se identifican las siguientes mejoras:
+
+### Amazon RDS
+
+Migrar la instancia MariaDB actual hacia **Amazon RDS**, habilitando funcionalidades administradas como:
+
+* Respaldos automatizados.
+* Gestión de parches.
+* Mayor disponibilidad.
+* Configuración Multi-AZ.
+
+### Amazon S3 + CloudFront
+
+Separar los archivos estáticos del frontend y alojarlos en:
+
+```text
+Amazon S3
+       ↓
+Amazon CloudFront
+```
+
+Esto permitiría disminuir la carga sobre las instancias EC2 y distribuir el contenido estático mediante una CDN.
+
+### CI/CD
+
+Implementar un pipeline automatizado mediante servicios como:
+
+```text
+AWS CodePipeline
+AWS CodeBuild
+```
+
+para automatizar la construcción y despliegue de nuevas versiones de los contenedores.
+
+---
+
+# 📁 Estructura General
 
 ```text
 freshbox-cloud-architecture/
 │
 ├── terraform/
-│   ├── ...
-│   └── ...
 │
 ├── frontend/
-│   └── ...
 │
 ├── get-products/
-│   └── ...
 │
 ├── create-product/
-│   └── ...
 │
 ├── update-product/
-│   └── ...
 │
 ├── delete-product/
-│   └── ...
 │
 ├── init.sql
-├── README.md
-└── ...
+│
+└── README.md
 ```
 
-> La estructura anterior representa la organización general esperada del proyecto. Los archivos y directorios concretos pueden variar según la implementación disponible en el repositorio.
+> La estructura mostrada corresponde a la organización conceptual del proyecto; los archivos concretos pueden variar según la implementación presente en el repositorio.
 
 ---
 
-# 📚 Tecnologías Utilizadas
+# 🎯 Estado de la Implementación
 
-| Tecnología                    | Uso                                  |
-| ----------------------------- | ------------------------------------ |
-| **Amazon Web Services (AWS)** | Plataforma de infraestructura cloud  |
-| **Terraform**                 | Infraestructura como código (IaC)    |
-| **Amazon VPC**                | Segmentación y aislamiento de red    |
-| **Application Load Balancer** | Distribución de tráfico              |
-| **Amazon EC2**                | Ejecución de la capa de aplicación   |
-| **Auto Scaling Group**        | Escalabilidad de las instancias      |
-| **Amazon ECR**                | Registro privado de imágenes Docker  |
-| **Docker**                    | Contenerización de microservicios    |
-| **Node.js**                   | Implementación de los microservicios |
-| **Nginx**                     | Servidor web / frontend              |
-| **MySQL**                     | Persistencia de datos                |
-| **AWS Systems Manager**       | Administración de instancias         |
+| Componente                  | Estado                         |
+| --------------------------- | ------------------------------ |
+| VPC                         | ✅ Implementada                 |
+| Subredes públicas/privadas  | ✅ Implementadas                |
+| Multi-AZ                    | ✅ Implementado                 |
+| Internet Gateway            | ✅ Implementado                 |
+| NAT Gateway                 | ✅ Implementado                 |
+| Security Groups             | ✅ Implementados                |
+| Application Load Balancer   | ✅ Implementado                 |
+| Auto Scaling Group          | ✅ Implementado                 |
+| EC2 `t4g.small`             | ✅ Implementadas                |
+| Amazon ECR                  | ✅ Implementado                 |
+| Docker                      | ✅ Implementado                 |
+| Nginx                       | ✅ Implementado                 |
+| Microservicios Node.js      | ✅ Implementados                |
+| MariaDB                     | ✅ Implementado                 |
+| Validación `/api/products`  | ✅ HTTP 200                     |
+| Frontend `Cargar productos` | ⚠️ Requiere ajuste de ruta API |
 
 ---
 
@@ -508,6 +849,9 @@ freshbox-cloud-architecture/
 
 ---
 
-> **FreshBox SpA — Evaluación Parcial N.º 1**
-> Arquitectura cloud segura, escalable y de alta disponibilidad sobre AWS.
+## 📚 Proyecto Académico
+
+**Evaluación Parcial N.º 1 — Arquitectura Cloud**
+
+FreshBox SpA — Implementación de arquitectura cloud en AWS.
 
