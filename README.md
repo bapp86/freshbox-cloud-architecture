@@ -338,8 +338,176 @@ El mismo procedimiento debe aplicarse a los demás microservicios de la solució
 
 La aplicación está compuesta por cinco contenedores principales:
 
-| Contenedor     | Descripción                                     | Puerto | Endpoint | Método |
-| -------------- | ----------------------------------------------- | -----: | -------- | ------ |
-| `frontend`     | Interfaz web basada en Nginx, HTML y JavaScript |   `80` | `/`      | `GET`  |
-| `get-products` | Consulta el catálogo de productos               | `3001` | `        |        |
+| Contenedor       | Descripción                                     | Puerto | Endpoint            | Método   |
+| ---------------- | ----------------------------------------------- | -----: | ------------------- | -------- |
+| `frontend`       | Interfaz web basada en Nginx, HTML y JavaScript |   `80` | `/`                 | `GET`    |
+| `get-products`   | Consulta el catálogo de productos               | `3001` | `/api/products`     | `GET`    |
+| `create-product` | Registra nuevos productos                       | `3002` | `/api/products`     | `POST`   |
+| `update-product` | Actualiza productos existentes                  | `3003` | `/api/products/:id` | `PUT`    |
+| `delete-product` | Elimina productos del sistema                   | `3004` | `/api/products/:id` | `DELETE` |
+
+---
+
+# 🌐 Flujo de Solicitudes
+
+El flujo principal de una solicitud es el siguiente:
+
+```text
+Internet
+   │
+   ▼
+Internet Gateway
+   │
+   ▼
+Application Load Balancer
+   │
+   ▼
+EC2 — Auto Scaling Group
+   │
+   ├──► Nginx / Frontend
+   │
+   └──► Microservicios Node.js
+             │
+             ▼
+        MySQL — Subred Privada
+```
+
+La separación por capas permite aislar los componentes de la infraestructura y controlar el flujo de comunicación entre ellos.
+
+---
+
+# 🔍 Validación End-to-End
+
+Una vez finalizado el despliegue, puedes comprobar el funcionamiento de la aplicación utilizando el DNS público entregado por Terraform.
+
+## Consultar los productos
+
+```bash
+curl http://<ALB_DNS_NAME>/api/products
+```
+
+También puedes acceder directamente desde un navegador:
+
+```text
+http://<ALB_DNS_NAME>/api/products
+```
+
+Una respuesta correcta debería devolver la información de los productos almacenados en la base de datos.
+
+---
+
+# ✅ Checklist de Despliegue
+
+Antes de considerar finalizada la implementación, verifica:
+
+* [ ] Terraform fue inicializado correctamente.
+* [ ] La infraestructura fue creada sin errores.
+* [ ] El Application Load Balancer está disponible.
+* [ ] Las instancias EC2 pertenecen al Auto Scaling Group.
+* [ ] La instancia MySQL se encuentra en una subred privada.
+* [ ] Las imágenes fueron publicadas en Amazon ECR.
+* [ ] Los contenedores Docker están ejecutándose correctamente.
+* [ ] Todos los contenedores utilizan la red `freshbox-net`.
+* [ ] La aplicación puede comunicarse con MySQL.
+* [ ] El endpoint `/api/products` responde correctamente.
+* [ ] El frontend es accesible mediante el DNS del ALB.
+
+---
+
+# 🛡️ Consideraciones de Seguridad
+
+La arquitectura busca mantener los componentes sensibles aislados de Internet.
+
+### Red
+
+* El **Application Load Balancer** funciona como punto de entrada público.
+* Las instancias de aplicación se encuentran en **subredes privadas**.
+* La base de datos MySQL permanece en una **subred privada**.
+* El acceso entre capas está controlado mediante **Security Groups**.
+
+### Administración
+
+La administración de las instancias EC2 se realiza mediante:
+
+```text
+AWS Systems Manager — Session Manager
+```
+
+evitando la necesidad de exponer directamente un puerto SSH a Internet.
+
+### Credenciales
+
+Para fines académicos se utiliza la credencial definida por el entorno:
+
+```text
+alumno / alumno123
+```
+
+En un entorno productivo, estas credenciales deberían ser reemplazadas por un mecanismo seguro de gestión de secretos.
+
+---
+
+# 📁 Estructura General del Proyecto
+
+```text
+freshbox-cloud-architecture/
+│
+├── terraform/
+│   ├── ...
+│   └── ...
+│
+├── frontend/
+│   └── ...
+│
+├── get-products/
+│   └── ...
+│
+├── create-product/
+│   └── ...
+│
+├── update-product/
+│   └── ...
+│
+├── delete-product/
+│   └── ...
+│
+├── init.sql
+├── README.md
+└── ...
+```
+
+> La estructura anterior representa la organización general esperada del proyecto. Los archivos y directorios concretos pueden variar según la implementación disponible en el repositorio.
+
+---
+
+# 📚 Tecnologías Utilizadas
+
+| Tecnología                    | Uso                                  |
+| ----------------------------- | ------------------------------------ |
+| **Amazon Web Services (AWS)** | Plataforma de infraestructura cloud  |
+| **Terraform**                 | Infraestructura como código (IaC)    |
+| **Amazon VPC**                | Segmentación y aislamiento de red    |
+| **Application Load Balancer** | Distribución de tráfico              |
+| **Amazon EC2**                | Ejecución de la capa de aplicación   |
+| **Auto Scaling Group**        | Escalabilidad de las instancias      |
+| **Amazon ECR**                | Registro privado de imágenes Docker  |
+| **Docker**                    | Contenerización de microservicios    |
+| **Node.js**                   | Implementación de los microservicios |
+| **Nginx**                     | Servidor web / frontend              |
+| **MySQL**                     | Persistencia de datos                |
+| **AWS Systems Manager**       | Administración de instancias         |
+
+---
+
+# 👨‍💻 Autor
+
+**Bryan Andrés Painemilla Panchillo**
+
+**Asignatura:** Arquitectura Cloud — ARY1102
+**Institución:** Duoc UC
+
+---
+
+> **FreshBox SpA — Evaluación Parcial N.º 1**
+> Arquitectura cloud segura, escalable y de alta disponibilidad sobre AWS.
 
