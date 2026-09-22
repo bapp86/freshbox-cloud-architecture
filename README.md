@@ -689,28 +689,29 @@ Este comportamiento permitió comprobar que la infraestructura de red y el backe
 
 ---
 
-# ✅ Checklist de Validación
+# ✅ Estado de la Implementación
 
-Antes de considerar finalizado el despliegue:
-
-* [ ] Terraform inicializado correctamente.
-* [ ] VPC creada.
-* [ ] Subredes públicas y privadas disponibles.
-* [ ] Recursos distribuidos en `us-east-1a` y `us-east-1b`.
-* [ ] Internet Gateway configurado.
-* [ ] NAT Gateway operativo.
-* [ ] Security Groups configurados correctamente.
-* [ ] Application Load Balancer disponible.
-* [ ] Auto Scaling Group configurado con 2–4 instancias.
-* [ ] Instancias `t4g.small` ARM64 operativas.
-* [ ] Imágenes disponibles en Amazon ECR.
-* [ ] Cinco contenedores Docker ejecutándose.
-* [ ] Red `freshbox-net` creada.
-* [ ] MariaDB disponible en la instancia privada.
-* [ ] Base de datos `freshbox` inicializada.
-* [ ] Cinco productos cargados.
-* [ ] Endpoint `/api/products` responde `HTTP 200`.
-* [ ] Acceso mediante DNS del ALB validado.
+| Componente | Estado |
+|---|---|
+| Terraform | ✅ Implementado |
+| VPC | ✅ Implementada |
+| Subredes públicas y privadas | ✅ Implementadas |
+| Multi-AZ (`us-east-1a` / `us-east-1b`) | ✅ Implementado |
+| Internet Gateway | ✅ Implementado |
+| NAT Gateway | ✅ Implementado |
+| Security Groups | ✅ Configurados |
+| Application Load Balancer | ✅ Operativo |
+| Auto Scaling Group | ✅ 2–4 instancias |
+| EC2 `t4g.small` ARM64 | ✅ Operativas |
+| Amazon ECR | ✅ Imágenes disponibles |
+| Contenedores Docker | ✅ 5 contenedores |
+| Red `freshbox-net` | ✅ Configurada |
+| MariaDB | ✅ Operativa |
+| Base de datos `freshbox` | ✅ Inicializada |
+| Productos iniciales | ✅ 5 registros |
+| Endpoint `/api/products` | ✅ HTTP 200 |
+| DNS del ALB | ✅ Validado |
+| Botón "Cargar productos" | ⚠️ Requiere ajuste de ruta API |
 
 ---
 
